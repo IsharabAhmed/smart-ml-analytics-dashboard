@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-8">
+    <a href="{% url 'dashboard_index' %}" class="text-indigo-400 hover:text-indigo-300 text-sm font-medium mb-4 inline-block">&larr; Back to Datasets</a>
+    <h1 class="text-4xl font-extrabold tracking-tight mb-2">{{ dataset.name }}</h1>
+    <div class="flex items-center space-x-4">
+        <span class="px-3 py-1 text-xs font-semibold rounded-full 
+            {% if dataset.status == 'COMPLETED' %}bg-green-500/20 text-green-400
+            {% elif dataset.status == 'FAILED' %}bg-red-500/20 text-red-400
+            {% else %}bg-yellow-500/20 text-yellow-400{% endif %}">
+            {{ dataset.status }}
+        </span>
+        <span class="text-gray-400 text-sm">Uploaded {{ dataset.created_at|date:"M d, Y" }}</span>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Left Column: Data Profile -->
+    <div class="lg:col-span-2 space-y-8">
+        {% if dataset.metadata %}
+        <div class="glassmorphism rounded-2xl p-6 border border-gray-800">
+            <h2 class="text-2xl font-bold mb-4">Data Profile</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gray-800/50 p-4 rounded-xl">
+                    <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Rows</div>
+                    <div class="text-2xl font-semibold">{{ dataset.metadata.num_rows }}</div>
+                </div>
+                <div class="bg-gray-800/50 p-4 rounded-xl">
+                    <div class="text-gray-400 text-xs uppercase tracking-wider mb-1">Columns</div>
+                    <div class="text-2xl font-semibold">{{ dataset.metadata.num_cols }}</div>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead>
+                        <tr class="text-gray-400 border-b border-gray-700">
+                            <th class="pb-2 font-medium">Column</th>
+                            <th class="pb-2 font-medium">Type</th>
+                            <th class="pb-2 font-medium">Missing</th>
+                            <th class="pb-2 font-medium">Unique / Mean</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                        {% for col in dataset.metadata.columns %}
+                        <tr class="text-gray-200">
+                            <td class="py-3 font-medium">{{ col.name }}</td>
+                            <td class="py-3"><span class="px-2 py-1 bg-gray-800 rounded text-xs">{{ col.type }}</span></td>
+                            <td class="py-3 {% if col.missing > 0 %}text-red-400{% endif %}">{{ col.missing }}</td>
+                            <td class="py-3">
+                                {% if col.unique_values %}
+                                    {{ col.unique_values }} unique
+                                {% else %}
+                                    {{ col.mean|floatformat:2 }} avg
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Raw Data Preview -->
+        <div class="glassmorphism rounded-2xl p-6 border border-gray-800">
+            <h2 class="text-2xl font-bold mb-4">Data Explorer</h2>
+            <div class="overflow-x-auto" id="dataPreviewContainer">
+                <div class="animate-pulse flex space-x-4">
+                    <div class="flex-1 space-y-4 py-1">
+                        <div class="h-4 bg-gray-700 rounded w-3/4"></div>
+                        <div class="space-y-2">
+                            <div class="h-4 bg-gray-700 rounded"></div>
+                            <div class="h-4 bg-gray-700 rounded w-5/6"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Model Training & Results -->
+    <div class="space-y-8">
+        <div class="glassmorphism rounded-2xl p-6 border border-gray-800">
+            <h2 class="text-2xl font-bold mb-4">Train Model</h2>
+            <form id="trainModelForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Task Type</label>
+                    <select id="taskType" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="CLASSIFICATION">Classification</option>
+                        <option value="REGRESSION">Regression</option>
+                        <option value="CLUSTERING">Clustering</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Target Column (Optional for Clustering)</label>
+                    <select id="targetColumn" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="">-- Select --</option>
+                        {% for col in dataset.metadata.columns %}
+                        <option value="{{ col.name }}">{{ col.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Algorithm</label>
+                    <select id="algorithm" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="auto">Auto-Select Best</option>
+                        <option value="RandomForest">Random Forest</option>
+                        <option value="XGBoost">XGBoost</option>
+                        <option value="LogisticRegression">Logistic Regression</option>
+                        <option value="LinearRegression">Linear Regression</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transform transition hover:-translate-y-0.5">
+                    Start Training
+                </button>
+            </form>
+        </div>
+
+        {% if models %}
+        <div class="glassmorphism rounded-2xl p-6 border border-gray-800">
+            <h2 class="text-2xl font-bold mb-4">Trained Models</h2>
+            <div class="space-y-4">
+                {% for model in models %}
+                <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="font-bold text-indigo-400">{{ model.algorithm|default:"Auto" }}</h4>
+                        <span class="text-xs px-2 py-1 rounded bg-gray-700">{{ model.status }}</span>
+                    </div>
+                    <div class="text-xs text-gray-400 mb-2">{{ model.task_type }} | Target: {{ model.target_column|default:"None" }}</div>
+                    
+                    {% if model.metrics %}
+                    <div class="grid grid-cols-2 gap-2 text-sm mt-3 pt-3 border-t border-gray-700">
+                        {% for key, val in model.metrics.items %}
+                        <div>
+                            <span class="text-gray-500 capitalize">{{ key }}:</span> 
+                            <span class="font-mono text-gray-200">{{ val|floatformat:3 }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if model.feature_importance %}
+                    <div class="mt-4">
+                        <h5 class="text-sm text-gray-300 font-semibold mb-2">Feature Importance</h5>
+                        <div id="plot_model_{{ model.id }}" class="w-full" style="height: 250px;"></div>
+                        <script>
+                            document.addEventListener('DOMContentLoaded', function() {
+                                const data = {{ model.feature_importance|safe }};
+                                const keys = Object.keys(data).reverse();
+                                const values = Object.values(data).reverse();
+                                
+                                const trace = {
+                                    x: values,
+                                    y: keys,
+                                    type: 'bar',
+                                    orientation: 'h',
+                                    marker: { color: '#6366f1' }
+                                };
+                                const layout = {
+                                    margin: { l: 100, r: 10, t: 10, b: 30 },
+                                    paper_bgcolor: 'rgba(0,0,0,0)',
+                                    plot_bgcolor: 'rgba(0,0,0,0)',
+                                    font: { color: '#9ca3af', size: 10 },
+                                    xaxis: { gridcolor: '#374151', zerolinecolor: '#374151' },
+                                    yaxis: { gridcolor: '#374151', zerolinecolor: '#374151' }
+                                };
+                                Plotly.newPlot('plot_model_{{ model.id }}', [trace], layout, {displayModeBar: false});
+                            });
+                        </script>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const datasetId = '{{ dataset.id }}';
+    
+    // Load data preview
+    fetch(`/api/datasets/${datasetId}/data/?per_page=5`)
+        .then(res => res.json())
+        .then(data => {
+            if(data.data && data.data.length > 0) {
+                const cols = Object.keys(data.data[0]);
+                let tableHtml = '<table class="w-full text-left text-sm whitespace-nowrap"><thead><tr class="text-gray-400 border-b border-gray-700">';
+                cols.forEach(c => tableHtml += `<th class="pb-2 pr-4 font-medium">${c}</th>`);
+                tableHtml += '</tr></thead><tbody class="divide-y divide-gray-800">';
+                
+                data.data.forEach(row => {
+                    tableHtml += '<tr class="text-gray-300">';
+                    cols.forEach(c => tableHtml += `<td class="py-2 pr-4">${row[c] !== null ? row[c] : ''}</td>`);
+                    tableHtml += '</tr>';
+                });
+                tableHtml += '</tbody></table>';
+                document.getElementById('dataPreviewContainer').innerHTML = tableHtml;
+            }
+        });
+
+    // Handle form submit
+    document.getElementById('trainModelForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const btn = this.querySelector('button');
+        btn.disabled = true;
+        btn.innerHTML = 'Starting...';
+
+        const payload = {
+            dataset: datasetId,
+            task_type: document.getElementById('taskType').value,
+            target_column: document.getElementById('targetColumn').value,
+            algorithm: document.getElementById('algorithm').value
+        };
+
+        fetch('/api/models/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            window.location.reload();
+        })
+        .catch(err => {
+            console.error(err);
+            btn.disabled = false;
+            btn.innerHTML = 'Error. Try again';
+        });
+    });
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,10 @@
+Django
+djangorestframework
+django-cors-headers
+celery
+redis
+pandas
+scikit-learn
+xgboost
+psycopg2-binary
+joblib
